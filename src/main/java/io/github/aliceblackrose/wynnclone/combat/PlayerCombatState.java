@@ -1,10 +1,10 @@
 package io.github.aliceblackrose.wynnclone.combat;
 
 public final class PlayerCombatState {
-
     private final ManaPool mana;
     private final CooldownTracker cooldowns = new CooldownTracker();
     private final ComboBuffer combo = new ComboBuffer();
+    private final AttackCooldown basicAttackCooldown = new AttackCooldown();
 
     public PlayerCombatState(double maximumMana) {
         this.mana = new ManaPool(maximumMana);
@@ -20,5 +20,9 @@ public final class PlayerCombatState {
 
     public ComboBuffer combo() {
         return combo;
+    }
+
+    public AttackCooldown basicAttackCooldown() {
+        return basicAttackCooldown;
     }
 }

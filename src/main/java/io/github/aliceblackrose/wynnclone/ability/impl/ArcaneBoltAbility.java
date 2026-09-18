@@ -2,6 +2,7 @@ package io.github.aliceblackrose.wynnclone.ability.impl;
 
 import io.github.aliceblackrose.wynnclone.ability.AbilityAction;
 import io.github.aliceblackrose.wynnclone.combat.CombatDamageService;
+import io.github.aliceblackrose.wynnclone.combat.DamageRequest;
 import io.github.aliceblackrose.wynnclone.combat.TargetingService;
 import java.util.Objects;
 import org.bukkit.Particle;
@@ -36,7 +37,7 @@ public final class ArcaneBoltAbility implements AbilityAction {
             caster.getWorld().spawnParticle(Particle.END_ROD, point, 1, 0.0, 0.0, 0.0, 0.0);
         }
 
-        target.ifPresent(entity -> damage.damage(caster, entity, 8.0));
+        target.ifPresent(entity -> damage.damage(caster, entity, DamageRequest.magic(8.0)));
         return true;
     }
 }

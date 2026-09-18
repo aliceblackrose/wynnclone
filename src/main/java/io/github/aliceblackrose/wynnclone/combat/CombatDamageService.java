@@ -1,17 +1,44 @@
 package io.github.aliceblackrose.wynnclone.combat;
 
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Objects;
+import java.util.UUID;
 import org.bukkit.entity.LivingEntity;
 import org.bukkit.entity.Player;
 import org.bukkit.util.Vector;
 
 public final class CombatDamageService {
-    public void damage(Player attacker, LivingEntity target, double amount) {
-        if (!Double.isFinite(amount) || amount <= 0.0) {
-            throw new IllegalArgumentException("Damage must be finite and positive");
+    private final DamageCalculator calculator;
+    private final Map<DamageKey, Integer> activeApplications = new HashMap<>();
+
+    public CombatDamageService(DamageCalculator calculator) {
+        this.calculator = Objects.requireNonNull(calculator, "calculator");
+    }
+
+    public DamageResult damage(Player attacker, LivingEntity target, DamageRequest request) {
+        Objects.requireNonNull(attacker, "attacker");
+        Objects.requireNonNull(target, "target");
+        DamageResult result = calculator.calculate(request);
+
+        if (!target.isValid() || target.isDead() || result.finalDamage() <= 0.0) {
+            return result;
         }
-        if (target.isValid() && !target.isDead()) {
-            target.damage(amount, attacker);
+
+        DamageKey key = new DamageKey(attacker.getUniqueId(), target.getUniqueId());
+        activeApplications.merge(key, 1, Integer::sum);
+        try {
+            target.damage(result.finalDamage(), attacker);
+        } finally {
+            activeApplications.computeIfPresent(key, (ignored, depth) -> depth <= 1 ? null : depth - 1);
         }
+        return result;
+    }
+
+    public boolean isInternal(Player attacker, LivingEntity target) {
+        Objects.requireNonNull(attacker, "attacker");
+        Objects.requireNonNull(target, "target");
+        return activeApplications.containsKey(new DamageKey(attacker.getUniqueId(), target.getUniqueId()));
     }
 
     public void knockAway(Player source, LivingEntity target, double horizontalStrength, double verticalStrength) {
@@ -32,5 +59,8 @@ public final class CombatDamageService {
 
         Vector velocity = direction.normalize().multiply(horizontalStrength).setY(verticalStrength);
         target.setVelocity(target.getVelocity().add(velocity));
+    }
+
+    private record DamageKey(UUID attackerId, UUID targetId) {
     }
 }

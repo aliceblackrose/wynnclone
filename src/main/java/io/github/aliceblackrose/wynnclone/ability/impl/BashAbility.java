@@ -2,6 +2,7 @@ package io.github.aliceblackrose.wynnclone.ability.impl;
 
 import io.github.aliceblackrose.wynnclone.ability.AbilityAction;
 import io.github.aliceblackrose.wynnclone.combat.CombatDamageService;
+import io.github.aliceblackrose.wynnclone.combat.DamageRequest;
 import io.github.aliceblackrose.wynnclone.combat.TargetingService;
 import java.util.Objects;
 import org.bukkit.Particle;
@@ -28,7 +29,7 @@ public final class BashAbility implements AbilityAction {
                 0.0);
 
         for (var target : targeting.cone(caster, 3.5, 0.15)) {
-            damage.damage(caster, target, 6.0);
+            damage.damage(caster, target, DamageRequest.physical(6.0));
             damage.knockAway(caster, target, 0.65, 0.2);
         }
         return true;
