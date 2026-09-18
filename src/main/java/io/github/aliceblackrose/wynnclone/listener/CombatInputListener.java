@@ -8,6 +8,7 @@ import io.github.aliceblackrose.wynnclone.combat.CombatStateStore;
 import io.github.aliceblackrose.wynnclone.combat.ComboOutcome;
 import io.github.aliceblackrose.wynnclone.combat.ComboService;
 import java.util.Objects;
+import org.bukkit.event.Event;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
@@ -35,7 +36,7 @@ public final class CombatInputListener implements Listener {
         this.clock = Objects.requireNonNull(clock, "clock");
     }
 
-    @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
+    @EventHandler(priority = EventPriority.HIGH)
     public void onInteract(PlayerInteractEvent event) {
         if (event.getHand() != EquipmentSlot.HAND) {
             return;
@@ -53,15 +54,14 @@ public final class CombatInputListener implements Listener {
             return;
         }
 
-        if (input == CombatInput.RIGHT
-                && event.getAction() == Action.RIGHT_CLICK_BLOCK
-                && event.getClickedBlock() != null
-                && event.getClickedBlock().getType().isInteractable()) {
+        // Preserve normal block interaction. Prototype spell inputs are performed in the air.
+        if (input == CombatInput.RIGHT && event.getAction() == Action.RIGHT_CLICK_BLOCK) {
             return;
         }
 
         ComboOutcome outcome = combos.accept(state.combo(), input, clock.nowMillis());
-        event.setCancelled(true);
+        event.setUseInteractedBlock(Event.Result.DENY);
+        event.setUseItemInHand(Event.Result.DENY);
 
         switch (outcome) {
             case ComboOutcome.Progress progress -> feedback.comboProgress(player, progress.inputs());
