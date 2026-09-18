@@ -1,0 +1,75 @@
+import org.gradle.api.publish.maven.MavenPublication
+
+plugins {
+    id 'java-library'
+    id 'jacoco'
+    id 'maven-publish'
+    id 'xyz.jpenilla.run-paper' version '3.1.0'
+}
+
+group = 'io.github.aliceblackrose'
+version = '1.0-SNAPSHOT'
+
+repositories {
+    mavenCentral()
+    maven {
+        name = 'papermc-repo'
+        url = uri('https://repo.papermc.io/repository/maven-public/')
+    }
+}
+
+dependencies {
+    compileOnly 'io.papermc.paper:paper-api:26.1.2.build.+'
+
+    testImplementation platform('org.junit:junit-bom:5.11.4')
+    testImplementation 'org.junit.jupiter:junit-jupiter'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}
+
+def targetJavaVersion = 25
+
+java {
+    withSourcesJar()
+    withJavadocJar()
+
+    def javaVersion = JavaVersion.toVersion(targetJavaVersion)
+    sourceCompatibility = javaVersion
+    targetCompatibility = javaVersion
+
+    if (JavaVersion.current() < javaVersion) {
+        toolchain.languageVersion = JavaLanguageVersion.of(targetJavaVersion)
+    }
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = 'UTF-8'
+    options.release.set(targetJavaVersion)
+}
+
+tasks.named('processResources') {
+    def props = [version: project.version]
+    inputs.properties(props)
+    filteringCharset = 'UTF-8'
+    filesMatching('plugin.yml') {
+        expand(props)
+    }
+}
+
+tasks.named('test') {
+    useJUnitPlatform()
+}
+
+tasks.named('runServer') {
+    minecraftVersion('26.1')
+}
+
+publishing {
+    publications {
+        create('mavenJava', MavenPublication) {
+            from components.java
+            groupId = project.group.toString()
+            artifactId = project.name
+            version = project.version.toString()
+        }
+    }
+}
