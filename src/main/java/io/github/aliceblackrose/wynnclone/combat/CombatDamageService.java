@@ -4,23 +4,33 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
+import org.bukkit.Particle;
+import org.bukkit.Sound;
 import org.bukkit.entity.LivingEntity;
 import org.bukkit.entity.Player;
 import org.bukkit.util.Vector;
 
 public final class CombatDamageService {
     private final DamageCalculator calculator;
+    private final CombatStateStore states;
     private final Map<DamageKey, Integer> activeApplications = new HashMap<>();
 
-    public CombatDamageService(DamageCalculator calculator) {
+    public CombatDamageService(DamageCalculator calculator, CombatStateStore states) {
         this.calculator = Objects.requireNonNull(calculator, "calculator");
+        this.states = Objects.requireNonNull(states, "states");
     }
 
     public DamageResult damage(Player attacker, LivingEntity target, DamageRequest request) {
         Objects.requireNonNull(attacker, "attacker");
         Objects.requireNonNull(target, "target");
-        DamageResult result = calculator.calculate(request);
+        Objects.requireNonNull(request, "request");
 
+        CombatStats attackerStats = states.state(attacker.getUniqueId()).stats();
+        CombatStats defenderStats = target instanceof Player player
+                ? states.state(player.getUniqueId()).stats()
+                : CombatStats.defaults();
+
+        DamageResult result = calculator.calculate(request, attackerStats, defenderStats);
         if (!target.isValid() || target.isDead() || result.finalDamage() <= 0.0) {
             return result;
         }
@@ -32,6 +42,19 @@ public final class CombatDamageService {
         } finally {
             activeApplications.computeIfPresent(key, (ignored, depth) -> depth <= 1 ? null : depth - 1);
         }
+
+        if (result.critical()) {
+            target.getWorld().spawnParticle(
+                    Particle.CRIT,
+                    target.getLocation().add(0.0, 1.0, 0.0),
+                    12,
+                    0.35,
+                    0.45,
+                    0.35,
+                    0.08);
+            attacker.playSound(attacker.getLocation(), Sound.ENTITY_PLAYER_ATTACK_CRIT, 0.7f, 1.15f);
+        }
+
         return result;
     }
 
