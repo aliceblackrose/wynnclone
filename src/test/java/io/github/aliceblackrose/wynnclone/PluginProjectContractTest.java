@@ -1,4 +1,4 @@
-package io.github.aliceblackrose.template;
+package io.github.aliceblackrose.wynnclone;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -12,19 +12,17 @@ import java.util.HashMap;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 
-final class TemplateProjectContractTest {
-
+final class PluginProjectContractTest {
     @Test
-    void pluginDescriptorMatchesTemplateEntrypoint() throws IOException {
+    void pluginDescriptorMatchesCombatEntrypoint() throws IOException {
         Map<String, String> descriptor = readPluginDescriptor();
-
-        assertEquals("TemplatePlugin", descriptor.get("name"));
-        assertEquals("io.github.aliceblackrose.template.TemplatePlugin", descriptor.get("main"));
-        assertEquals("26.1", descriptor.get("api-version"));
+        assertEquals("WynnClone", descriptor.get("name"));
+        assertEquals("io.github.aliceblackrose.wynnclone.WynnClonePlugin", descriptor.get("main"));
+        assertEquals("26.2", descriptor.get("api-version"));
     }
 
     private static Map<String, String> readPluginDescriptor() throws IOException {
-        InputStream stream = TemplateProjectContractTest.class.getClassLoader().getResourceAsStream("plugin.yml");
+        InputStream stream = PluginProjectContractTest.class.getClassLoader().getResourceAsStream("plugin.yml");
         assertNotNull(stream, "plugin.yml must be packaged on the test runtime classpath");
 
         Map<String, String> values = new HashMap<>();

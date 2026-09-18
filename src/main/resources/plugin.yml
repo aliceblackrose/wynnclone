@@ -1,6 +1,14 @@
-name: TemplatePlugin
+name: WynnClone
 version: '${version}'
-main: io.github.aliceblackrose.template.TemplatePlugin
-api-version: '26.1'
+main: io.github.aliceblackrose.wynnclone.WynnClonePlugin
+api-version: '26.2'
 author: aliceblackrose
-description: Minimal Paper plugin template
+description: Combat-focused action RPG prototype
+commands:
+  combat:
+    description: WynnClone combat debug command
+    usage: /combat <mana|combo|cast>
+    permission: wynnclone.combat.debug
+permissions:
+  wynnclone.combat.debug:
+    default: op

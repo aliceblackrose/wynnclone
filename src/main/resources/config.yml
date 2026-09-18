@@ -1,1 +1,7 @@
-# example 
+combat:
+  combo-timeout-ms: 1200
+  max-combo-length: 4
+
+mana:
+  maximum: 100.0
+  regeneration-per-second: 5.0
