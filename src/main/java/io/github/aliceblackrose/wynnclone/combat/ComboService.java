@@ -3,7 +3,6 @@ package io.github.aliceblackrose.wynnclone.combat;
 import java.util.Objects;
 
 public final class ComboService {
-
     private final AbilityCatalog catalog;
     private final long timeoutMillis;
     private final int maxLength;
@@ -18,6 +17,14 @@ public final class ComboService {
         }
         this.timeoutMillis = timeoutMillis;
         this.maxLength = maxLength;
+    }
+
+    public boolean active(ComboBuffer buffer, long nowMillis) {
+        Objects.requireNonNull(buffer, "buffer");
+        if (buffer.isExpired(nowMillis, timeoutMillis)) {
+            buffer.clear();
+        }
+        return buffer.active();
     }
 
     public ComboOutcome accept(ComboBuffer buffer, CombatInput input, long nowMillis) {

@@ -12,15 +12,19 @@ import io.github.aliceblackrose.wynnclone.ability.impl.DashAbility;
 import io.github.aliceblackrose.wynnclone.combat.AbilityCatalog;
 import io.github.aliceblackrose.wynnclone.combat.AbilityDefinition;
 import io.github.aliceblackrose.wynnclone.combat.AbilityId;
+import io.github.aliceblackrose.wynnclone.combat.BasicAttackService;
 import io.github.aliceblackrose.wynnclone.combat.CombatDamageService;
 import io.github.aliceblackrose.wynnclone.combat.CombatFeedback;
 import io.github.aliceblackrose.wynnclone.combat.CombatStateStore;
 import io.github.aliceblackrose.wynnclone.combat.ComboService;
+import io.github.aliceblackrose.wynnclone.combat.DamageCalculator;
 import io.github.aliceblackrose.wynnclone.combat.InputCombo;
 import io.github.aliceblackrose.wynnclone.combat.SystemCombatClock;
 import io.github.aliceblackrose.wynnclone.combat.TargetingService;
+import io.github.aliceblackrose.wynnclone.combat.WeaponProfileResolver;
 import io.github.aliceblackrose.wynnclone.command.CombatCommand;
 import io.github.aliceblackrose.wynnclone.listener.CombatInputListener;
+import io.github.aliceblackrose.wynnclone.listener.MeleeCombatListener;
 import io.github.aliceblackrose.wynnclone.listener.PlayerLifecycleListener;
 import java.util.Objects;
 import org.bukkit.command.PluginCommand;
@@ -44,16 +48,31 @@ public final class WynnClonePlugin extends JavaPlugin {
         var abilities = new CombatAbilities(catalog);
         var feedback = new CombatFeedback();
         var targeting = new TargetingService();
-        var damage = new CombatDamageService();
+        var damage = new CombatDamageService(new DamageCalculator());
 
         combatStates = new CombatStateStore(maximumMana);
         var comboService = new ComboService(catalog, comboTimeoutMillis, maxComboLength);
         var abilityEngine = new AbilityEngine(abilities, combatStates, clock, feedback, getLogger());
+        var basicAttacks = new BasicAttackService(
+                combatStates,
+                clock,
+                new WeaponProfileResolver(),
+                damage);
 
         registerPrototypeAbilities(abilities, targeting, damage);
 
         getServer().getPluginManager().registerEvents(
                 new CombatInputListener(combatStates, comboService, abilityEngine, feedback, clock),
+                this);
+        getServer().getPluginManager().registerEvents(
+                new MeleeCombatListener(
+                        combatStates,
+                        comboService,
+                        abilityEngine,
+                        basicAttacks,
+                        damage,
+                        feedback,
+                        clock),
                 this);
         getServer().getPluginManager().registerEvents(new PlayerLifecycleListener(combatStates), this);
 

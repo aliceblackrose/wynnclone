@@ -49,8 +49,9 @@ public final class CombatInputListener implements Listener {
 
         var player = event.getPlayer();
         var state = states.state(player.getUniqueId());
+        long now = clock.nowMillis();
 
-        if (input == CombatInput.LEFT && !state.combo().active()) {
+        if (input == CombatInput.LEFT && !combos.active(state.combo(), now)) {
             return;
         }
 
@@ -59,7 +60,7 @@ public final class CombatInputListener implements Listener {
             return;
         }
 
-        ComboOutcome outcome = combos.accept(state.combo(), input, clock.nowMillis());
+        ComboOutcome outcome = combos.accept(state.combo(), input, now);
         event.setUseInteractedBlock(Event.Result.DENY);
         event.setUseItemInHand(Event.Result.DENY);
 

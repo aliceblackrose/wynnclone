@@ -3,6 +3,7 @@ package io.github.aliceblackrose.wynnclone.combat;
 import static io.github.aliceblackrose.wynnclone.combat.CombatInput.LEFT;
 import static io.github.aliceblackrose.wynnclone.combat.CombatInput.RIGHT;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -54,6 +55,14 @@ final class ComboServiceTest {
 
         ComboOutcome.Progress progress = assertInstanceOf(ComboOutcome.Progress.class, outcome);
         assertEquals(java.util.List.of(RIGHT), progress.inputs());
+    }
+
+    @Test
+    void activeClearsExpiredStateBeforeMeleeDecision() {
+        service.accept(buffer, RIGHT, 100L);
+
+        assertFalse(service.active(buffer, 1301L));
+        assertTrue(buffer.inputs().isEmpty());
     }
 
     @Test
