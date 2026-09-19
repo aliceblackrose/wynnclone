@@ -38,12 +38,7 @@ public final class DamageCalculator {
         }
         double scaledDamage = Math.min(scaled, MAX_DAMAGE);
 
-        double criticalChance = Math.clamp(
-                attackerStats.criticalChance() + request.criticalChanceBonus(),
-                0.0,
-                1.0);
-        boolean critical = criticalChance > 0.0 && nextCriticalRoll() < criticalChance;
-
+        boolean critical = isCritical(request, attackerStats);
         double preMitigationDamage = scaledDamage;
         if (critical) {
             double criticalMultiplier = Math.max(
@@ -68,6 +63,18 @@ public final class DamageCalculator {
                 scaledDamage,
                 critical,
                 Math.min(finalDamage, MAX_DAMAGE));
+    }
+
+    private boolean isCritical(DamageRequest request, CombatStats attackerStats) {
+        if (!request.criticalEligible()) {
+            return false;
+        }
+
+        double criticalChance = Math.clamp(
+                attackerStats.criticalChance() + request.criticalChanceBonus(),
+                0.0,
+                1.0);
+        return criticalChance > 0.0 && nextCriticalRoll() < criticalChance;
     }
 
     private double nextCriticalRoll() {

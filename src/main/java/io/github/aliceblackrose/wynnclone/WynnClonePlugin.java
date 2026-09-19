@@ -16,12 +16,15 @@ import io.github.aliceblackrose.wynnclone.combat.BasicAttackService;
 import io.github.aliceblackrose.wynnclone.combat.CombatDamageService;
 import io.github.aliceblackrose.wynnclone.combat.CombatFeedback;
 import io.github.aliceblackrose.wynnclone.combat.CombatStateStore;
+import io.github.aliceblackrose.wynnclone.combat.CombatTicker;
 import io.github.aliceblackrose.wynnclone.combat.ComboService;
 import io.github.aliceblackrose.wynnclone.combat.DamageCalculator;
 import io.github.aliceblackrose.wynnclone.combat.InputCombo;
 import io.github.aliceblackrose.wynnclone.combat.SystemCombatClock;
 import io.github.aliceblackrose.wynnclone.combat.TargetingService;
 import io.github.aliceblackrose.wynnclone.combat.WeaponDefinitionResolver;
+import io.github.aliceblackrose.wynnclone.combat.projectile.VirtualProjectileService;
+import io.github.aliceblackrose.wynnclone.combat.status.StatusEffectService;
 import io.github.aliceblackrose.wynnclone.command.CombatCommand;
 import io.github.aliceblackrose.wynnclone.listener.CombatInputListener;
 import io.github.aliceblackrose.wynnclone.listener.MeleeCombatListener;
@@ -32,6 +35,8 @@ import org.bukkit.plugin.java.JavaPlugin;
 
 public final class WynnClonePlugin extends JavaPlugin {
     private CombatStateStore combatStates;
+    private VirtualProjectileService projectiles;
+    private StatusEffectService statusEffects;
 
     @Override
     public void onEnable() {
@@ -51,6 +56,9 @@ public final class WynnClonePlugin extends JavaPlugin {
 
         combatStates = new CombatStateStore(maximumMana);
         var damage = new CombatDamageService(new DamageCalculator(), combatStates);
+        statusEffects = new StatusEffectService(getServer(), clock, damage);
+        projectiles = new VirtualProjectileService(getServer(), damage, statusEffects);
+
         var comboService = new ComboService(catalog, comboTimeoutMillis, maxComboLength);
         var abilityEngine = new AbilityEngine(abilities, combatStates, clock, feedback, getLogger());
         var basicAttacks = new BasicAttackService(
@@ -59,7 +67,7 @@ public final class WynnClonePlugin extends JavaPlugin {
                 new WeaponDefinitionResolver(),
                 damage);
 
-        registerPrototypeAbilities(abilities, targeting, damage);
+        registerPrototypeAbilities(abilities, targeting, damage, projectiles);
 
         getServer().getPluginManager().registerEvents(
                 new CombatInputListener(combatStates, comboService, abilityEngine, feedback, clock),
@@ -77,10 +85,16 @@ public final class WynnClonePlugin extends JavaPlugin {
         getServer().getPluginManager().registerEvents(new PlayerLifecycleListener(combatStates), this);
 
         getServer().getOnlinePlayers().forEach(player -> combatStates.state(player.getUniqueId()));
-        startManaRegeneration(manaRegenerationPerSecond);
+
+        var ticker = new CombatTicker(
+                combatStates,
+                projectiles,
+                statusEffects,
+                manaRegenerationPerSecond);
+        getServer().getScheduler().runTaskTimer(this, ticker::tick, 1L, 1L);
 
         PluginCommand combatCommand = Objects.requireNonNull(getCommand("combat"), "combat command missing from plugin.yml");
-        var commandHandler = new CombatCommand(combatStates, abilities, abilityEngine);
+        var commandHandler = new CombatCommand(combatStates, abilities, abilityEngine, statusEffects, projectiles);
         combatCommand.setExecutor(commandHandler);
         combatCommand.setTabCompleter(commandHandler);
 
@@ -89,6 +103,12 @@ public final class WynnClonePlugin extends JavaPlugin {
 
     @Override
     public void onDisable() {
+        if (projectiles != null) {
+            projectiles.clear();
+        }
+        if (statusEffects != null) {
+            statusEffects.clear();
+        }
         if (combatStates != null) {
             combatStates.clear();
         }
@@ -97,7 +117,8 @@ public final class WynnClonePlugin extends JavaPlugin {
     private void registerPrototypeAbilities(
             CombatAbilities abilities,
             TargetingService targeting,
-            CombatDamageService damage) {
+            CombatDamageService damage,
+            VirtualProjectileService projectiles) {
         abilities.register(
                 new AbilityDefinition(
                         new AbilityId("warrior.bash"),
@@ -123,7 +144,7 @@ public final class WynnClonePlugin extends JavaPlugin {
                         InputCombo.of(RIGHT, LEFT, RIGHT),
                         25.0,
                         1250L),
-                new ArcaneBoltAbility(targeting, damage));
+                new ArcaneBoltAbility(projectiles));
 
         abilities.register(
                 new AbilityDefinition(
@@ -133,15 +154,6 @@ public final class WynnClonePlugin extends JavaPlugin {
                         30.0,
                         4000L),
                 new BlinkAbility());
-    }
-
-    private void startManaRegeneration(double manaRegenerationPerSecond) {
-        double amountPerHalfSecond = manaRegenerationPerSecond / 2.0;
-        getServer().getScheduler().runTaskTimer(
-                this,
-                () -> combatStates.values().forEach(state -> state.mana().restore(amountPerHalfSecond)),
-                10L,
-                10L);
     }
 
     private static void validateConfiguration(
