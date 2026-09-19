@@ -59,9 +59,32 @@ final class DamageCalculatorTest {
     }
 
     @Test
+    void nonCriticalDamageNeverSamplesRandomSource() {
+        var calculator = new DamageCalculator(() -> {
+            throw new AssertionError("Critical RNG should not be sampled");
+        });
+        var attacker = new CombatStats(1.0, 1.0, 1.0, 5.0, 0.0);
+
+        DamageResult result = calculator.calculate(
+                DamageRequest.magic(4.0).withoutCriticals(),
+                attacker,
+                NEUTRAL);
+
+        assertFalse(result.critical());
+        assertEquals(4.0, result.finalDamage());
+    }
+
+    @Test
     void negativeAdditiveDamageCannotProduceNegativeDamage() {
         var calculator = new DamageCalculator(() -> 0.99);
-        var request = new DamageRequest(DamageType.MAGIC, 5.0, -10.0, 3.0, 0.0, 0.0);
+        var request = new DamageRequest(
+                DamageType.MAGIC,
+                5.0,
+                -10.0,
+                3.0,
+                0.0,
+                0.0,
+                true);
 
         DamageResult result = calculator.calculate(request, NEUTRAL, NEUTRAL);
 
@@ -78,7 +101,8 @@ final class DamageCalculatorTest {
                 0.0,
                 100.0,
                 0.0,
-                0.0);
+                0.0,
+                true);
 
         DamageResult result = calculator.calculate(request, NEUTRAL, NEUTRAL);
 

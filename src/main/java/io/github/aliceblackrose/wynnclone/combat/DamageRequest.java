@@ -8,7 +8,8 @@ public record DamageRequest(
         double additiveDamage,
         double multiplier,
         double criticalChanceBonus,
-        double criticalDamageMultiplierBonus) {
+        double criticalDamageMultiplierBonus,
+        boolean criticalEligible) {
 
     public DamageRequest {
         Objects.requireNonNull(type, "type");
@@ -31,11 +32,11 @@ public record DamageRequest(
     }
 
     public static DamageRequest physical(double baseDamage) {
-        return new DamageRequest(DamageType.PHYSICAL, baseDamage, 0.0, 1.0, 0.0, 0.0);
+        return new DamageRequest(DamageType.PHYSICAL, baseDamage, 0.0, 1.0, 0.0, 0.0, true);
     }
 
     public static DamageRequest magic(double baseDamage) {
-        return new DamageRequest(DamageType.MAGIC, baseDamage, 0.0, 1.0, 0.0, 0.0);
+        return new DamageRequest(DamageType.MAGIC, baseDamage, 0.0, 1.0, 0.0, 0.0, true);
     }
 
     public DamageRequest withCriticalChanceBonus(double bonus) {
@@ -45,6 +46,21 @@ public record DamageRequest(
                 additiveDamage,
                 multiplier,
                 bonus,
-                criticalDamageMultiplierBonus);
+                criticalDamageMultiplierBonus,
+                criticalEligible);
+    }
+
+    public DamageRequest withoutCriticals() {
+        if (!criticalEligible) {
+            return this;
+        }
+        return new DamageRequest(
+                type,
+                baseDamage,
+                additiveDamage,
+                multiplier,
+                criticalChanceBonus,
+                criticalDamageMultiplierBonus,
+                false);
     }
 }
