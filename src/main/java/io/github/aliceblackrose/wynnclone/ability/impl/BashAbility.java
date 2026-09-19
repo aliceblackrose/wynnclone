@@ -1,37 +1,43 @@
 package io.github.aliceblackrose.wynnclone.ability.impl;
 
 import io.github.aliceblackrose.wynnclone.ability.AbilityAction;
-import io.github.aliceblackrose.wynnclone.combat.CombatDamageService;
 import io.github.aliceblackrose.wynnclone.combat.DamageRequest;
-import io.github.aliceblackrose.wynnclone.combat.TargetingService;
+import io.github.aliceblackrose.wynnclone.combat.area.AreaImpactRequest;
+import io.github.aliceblackrose.wynnclone.combat.telegraph.AreaTelegraphService;
+import io.github.aliceblackrose.wynnclone.combat.telegraph.AreaTelegraphSpec;
 import java.util.Objects;
+import java.util.Optional;
 import org.bukkit.Particle;
 import org.bukkit.entity.Player;
+import org.bukkit.util.Vector;
 
 public final class BashAbility implements AbilityAction {
-    private final TargetingService targeting;
-    private final CombatDamageService damage;
+    private static final AreaTelegraphSpec TELEGRAPH = new AreaTelegraphSpec(
+            350L,
+            Particle.CRIT,
+            Particle.SWEEP_ATTACK,
+            new AreaImpactRequest(
+                    2.25,
+                    1.75,
+                    DamageRequest.physical(6.0),
+                    Optional.empty(),
+                    0.65,
+                    0.20));
 
-    public BashAbility(TargetingService targeting, CombatDamageService damage) {
-        this.targeting = Objects.requireNonNull(targeting, "targeting");
-        this.damage = Objects.requireNonNull(damage, "damage");
+    private final AreaTelegraphService telegraphs;
+
+    public BashAbility(AreaTelegraphService telegraphs) {
+        this.telegraphs = Objects.requireNonNull(telegraphs, "telegraphs");
     }
 
     @Override
     public boolean execute(Player caster) {
-        caster.getWorld().spawnParticle(
-                Particle.SWEEP_ATTACK,
-                caster.getLocation().add(0.0, 1.0, 0.0),
-                8,
-                1.2,
-                0.4,
-                1.2,
-                0.0);
-
-        for (var target : targeting.cone(caster, 3.5, 0.15)) {
-            damage.damage(caster, target, DamageRequest.physical(6.0));
-            damage.knockAway(caster, target, 0.65, 0.2);
+        Vector direction = caster.getLocation().getDirection().setY(0.0);
+        if (direction.lengthSquared() < 1.0e-9) {
+            return false;
         }
-        return true;
+
+        var center = caster.getLocation().add(direction.normalize().multiply(2.0));
+        return telegraphs.spawn(caster, center, TELEGRAPH);
     }
 }

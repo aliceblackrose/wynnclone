@@ -2,6 +2,7 @@ package io.github.aliceblackrose.wynnclone.combat;
 
 import io.github.aliceblackrose.wynnclone.combat.projectile.VirtualProjectileService;
 import io.github.aliceblackrose.wynnclone.combat.status.StatusEffectService;
+import io.github.aliceblackrose.wynnclone.combat.telegraph.AreaTelegraphService;
 import java.util.Objects;
 
 public final class CombatTicker {
@@ -10,6 +11,7 @@ public final class CombatTicker {
     private final CombatStateStore states;
     private final VirtualProjectileService projectiles;
     private final StatusEffectService statusEffects;
+    private final AreaTelegraphService telegraphs;
     private final double manaPerHalfSecond;
     private int ticksUntilManaRegen = MANA_REGEN_INTERVAL_TICKS;
 
@@ -17,10 +19,12 @@ public final class CombatTicker {
             CombatStateStore states,
             VirtualProjectileService projectiles,
             StatusEffectService statusEffects,
+            AreaTelegraphService telegraphs,
             double manaRegenerationPerSecond) {
         this.states = Objects.requireNonNull(states, "states");
         this.projectiles = Objects.requireNonNull(projectiles, "projectiles");
         this.statusEffects = Objects.requireNonNull(statusEffects, "statusEffects");
+        this.telegraphs = Objects.requireNonNull(telegraphs, "telegraphs");
 
         if (!Double.isFinite(manaRegenerationPerSecond) || manaRegenerationPerSecond < 0.0) {
             throw new IllegalArgumentException("Mana regeneration must be finite and non-negative");
@@ -31,6 +35,7 @@ public final class CombatTicker {
     public void tick() {
         projectiles.tick();
         statusEffects.tick();
+        telegraphs.tick();
 
         ticksUntilManaRegen--;
         if (ticksUntilManaRegen > 0) {

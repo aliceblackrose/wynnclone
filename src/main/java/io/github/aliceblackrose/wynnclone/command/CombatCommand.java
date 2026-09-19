@@ -7,6 +7,7 @@ import io.github.aliceblackrose.wynnclone.combat.CombatInput;
 import io.github.aliceblackrose.wynnclone.combat.CombatStateStore;
 import io.github.aliceblackrose.wynnclone.combat.projectile.VirtualProjectileService;
 import io.github.aliceblackrose.wynnclone.combat.status.StatusEffectService;
+import io.github.aliceblackrose.wynnclone.combat.telegraph.AreaTelegraphService;
 import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
@@ -24,18 +25,21 @@ public final class CombatCommand implements CommandExecutor, TabCompleter {
     private final AbilityEngine engine;
     private final StatusEffectService statusEffects;
     private final VirtualProjectileService projectiles;
+    private final AreaTelegraphService telegraphs;
 
     public CombatCommand(
             CombatStateStore states,
             CombatAbilities abilities,
             AbilityEngine engine,
             StatusEffectService statusEffects,
-            VirtualProjectileService projectiles) {
+            VirtualProjectileService projectiles,
+            AreaTelegraphService telegraphs) {
         this.states = Objects.requireNonNull(states, "states");
         this.abilities = Objects.requireNonNull(abilities, "abilities");
         this.engine = Objects.requireNonNull(engine, "engine");
         this.statusEffects = Objects.requireNonNull(statusEffects, "statusEffects");
         this.projectiles = Objects.requireNonNull(projectiles, "projectiles");
+        this.telegraphs = Objects.requireNonNull(telegraphs, "telegraphs");
     }
 
     @Override
@@ -46,7 +50,7 @@ public final class CombatCommand implements CommandExecutor, TabCompleter {
         }
         if (args.length == 0) {
             player.sendMessage(Component.text(
-                    "/combat <mana|stats|effects|projectiles|combo|cast>",
+                    "/combat <mana|stats|effects|projectiles|telegraphs|combo|cast>",
                     NamedTextColor.YELLOW));
             return true;
         }
@@ -56,6 +60,7 @@ public final class CombatCommand implements CommandExecutor, TabCompleter {
             case "stats" -> showStats(player);
             case "effects" -> showEffects(player);
             case "projectiles" -> showProjectiles(player);
+            case "telegraphs" -> showTelegraphs(player);
             case "combo" -> showCombo(player);
             case "cast" -> cast(player, args);
             default -> false;
@@ -104,6 +109,13 @@ public final class CombatCommand implements CommandExecutor, TabCompleter {
         return true;
     }
 
+    private boolean showTelegraphs(Player player) {
+        player.sendMessage(Component.text(
+                "Active area telegraphs: " + telegraphs.activeCount(),
+                NamedTextColor.AQUA));
+        return true;
+    }
+
     private boolean showCombo(Player player) {
         List<CombatInput> inputs = states.state(player.getUniqueId()).combo().inputs();
         String combo = inputs.isEmpty()
@@ -132,7 +144,7 @@ public final class CombatCommand implements CommandExecutor, TabCompleter {
     public List<String> onTabComplete(CommandSender sender, Command command, String alias, String[] args) {
         if (args.length == 1) {
             String prefix = args[0].toLowerCase(Locale.ROOT);
-            return List.of("mana", "stats", "effects", "projectiles", "combo", "cast").stream()
+            return List.of("mana", "stats", "effects", "projectiles", "telegraphs", "combo", "cast").stream()
                     .filter(value -> value.startsWith(prefix))
                     .toList();
         }

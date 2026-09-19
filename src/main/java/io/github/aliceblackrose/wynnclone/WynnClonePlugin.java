@@ -21,10 +21,11 @@ import io.github.aliceblackrose.wynnclone.combat.ComboService;
 import io.github.aliceblackrose.wynnclone.combat.DamageCalculator;
 import io.github.aliceblackrose.wynnclone.combat.InputCombo;
 import io.github.aliceblackrose.wynnclone.combat.SystemCombatClock;
-import io.github.aliceblackrose.wynnclone.combat.TargetingService;
 import io.github.aliceblackrose.wynnclone.combat.WeaponDefinitionResolver;
+import io.github.aliceblackrose.wynnclone.combat.area.AreaImpactService;
 import io.github.aliceblackrose.wynnclone.combat.projectile.VirtualProjectileService;
 import io.github.aliceblackrose.wynnclone.combat.status.StatusEffectService;
+import io.github.aliceblackrose.wynnclone.combat.telegraph.AreaTelegraphService;
 import io.github.aliceblackrose.wynnclone.command.CombatCommand;
 import io.github.aliceblackrose.wynnclone.listener.CombatInputListener;
 import io.github.aliceblackrose.wynnclone.listener.MeleeCombatListener;
@@ -37,6 +38,7 @@ public final class WynnClonePlugin extends JavaPlugin {
     private CombatStateStore combatStates;
     private VirtualProjectileService projectiles;
     private StatusEffectService statusEffects;
+    private AreaTelegraphService telegraphs;
 
     @Override
     public void onEnable() {
@@ -52,12 +54,13 @@ public final class WynnClonePlugin extends JavaPlugin {
         var catalog = new AbilityCatalog();
         var abilities = new CombatAbilities(catalog);
         var feedback = new CombatFeedback();
-        var targeting = new TargetingService();
 
         combatStates = new CombatStateStore(maximumMana);
         var damage = new CombatDamageService(new DamageCalculator(), combatStates);
         statusEffects = new StatusEffectService(getServer(), clock, damage);
-        projectiles = new VirtualProjectileService(getServer(), damage, statusEffects);
+        var areaImpacts = new AreaImpactService(damage, statusEffects);
+        telegraphs = new AreaTelegraphService(getServer(), clock, areaImpacts);
+        projectiles = new VirtualProjectileService(getServer(), damage, statusEffects, areaImpacts);
 
         var comboService = new ComboService(catalog, comboTimeoutMillis, maxComboLength);
         var abilityEngine = new AbilityEngine(abilities, combatStates, clock, feedback, getLogger());
@@ -67,7 +70,7 @@ public final class WynnClonePlugin extends JavaPlugin {
                 new WeaponDefinitionResolver(),
                 damage);
 
-        registerPrototypeAbilities(abilities, targeting, damage, projectiles);
+        registerPrototypeAbilities(abilities, telegraphs, projectiles);
 
         getServer().getPluginManager().registerEvents(
                 new CombatInputListener(combatStates, comboService, abilityEngine, feedback, clock),
@@ -90,11 +93,18 @@ public final class WynnClonePlugin extends JavaPlugin {
                 combatStates,
                 projectiles,
                 statusEffects,
+                telegraphs,
                 manaRegenerationPerSecond);
         getServer().getScheduler().runTaskTimer(this, ticker::tick, 1L, 1L);
 
         PluginCommand combatCommand = Objects.requireNonNull(getCommand("combat"), "combat command missing from plugin.yml");
-        var commandHandler = new CombatCommand(combatStates, abilities, abilityEngine, statusEffects, projectiles);
+        var commandHandler = new CombatCommand(
+                combatStates,
+                abilities,
+                abilityEngine,
+                statusEffects,
+                projectiles,
+                telegraphs);
         combatCommand.setExecutor(commandHandler);
         combatCommand.setTabCompleter(commandHandler);
 
@@ -109,6 +119,9 @@ public final class WynnClonePlugin extends JavaPlugin {
         if (statusEffects != null) {
             statusEffects.clear();
         }
+        if (telegraphs != null) {
+            telegraphs.clear();
+        }
         if (combatStates != null) {
             combatStates.clear();
         }
@@ -116,8 +129,7 @@ public final class WynnClonePlugin extends JavaPlugin {
 
     private void registerPrototypeAbilities(
             CombatAbilities abilities,
-            TargetingService targeting,
-            CombatDamageService damage,
+            AreaTelegraphService telegraphs,
             VirtualProjectileService projectiles) {
         abilities.register(
                 new AbilityDefinition(
@@ -126,7 +138,7 @@ public final class WynnClonePlugin extends JavaPlugin {
                         InputCombo.of(RIGHT, LEFT, LEFT),
                         20.0,
                         1500L),
-                new BashAbility(targeting, damage));
+                new BashAbility(telegraphs));
 
         abilities.register(
                 new AbilityDefinition(
