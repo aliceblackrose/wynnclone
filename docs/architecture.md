@@ -1,170 +1,166 @@
 # Combat architecture
 
-The plugin is intentionally combat-only.
+The project remains combat-only.
 
 ```text
-Paper input / damage event
-           |
-           v
-  input boundary listeners
-           |
-      +----+----------------------+
-      |                           |
-      v                           v
- ComboService              BasicAttackService
-      |                           |
-      v                           v
- AbilityEngine          WeaponDefinitionResolver
-      |                           |
-      |                     DamageRequest
-      |                           |
-      |                           v
-      |                   CombatDamageService
-      |                           ^
-      |                           |
-      +------ abilities ----------+
-      |
-      +------ ArcaneBoltAbility
-                 |
-                 v
-       VirtualProjectileService
-                 |
-          Paper World.rayTrace
-                 |
-          +------+------+
-          |             |
-          v             v
-       block hit     entity hit
-                        |
-                        +----> CombatDamageService
-                        |
-                        +----> StatusEffectService
+                  combat input
+                       |
+                       v
+                  ComboService
+                       |
+                       v
+                  AbilityEngine
+                 /             \
+                v               v
+       direct/movement     delayed/ranged
+                            /          \
+                           v            v
+                AreaTelegraphService   VirtualProjectileService
+                           |            |
+                           v            v
+                    AreaImpactService   segment ray trace
+                           ^            |
+                           |       +----+----------+
+                           |       |               |
+                           |       v               v
+                           |   direct hit       explosion
+                           |       |               |
+                           +-------+---------------+
                                    |
                                    v
-                           StatusEffectTracker
+                         CombatDamageService
+                                   |
+                                   v
+                            DamageCalculator
 ```
 
-## Scheduler model
-
-There is one repeating combat scheduler:
+## Central ticker
 
 ```text
-CombatTicker (every server tick)
-    |
-    +-- VirtualProjectileService.tick()
-    |
-    +-- StatusEffectService.tick()
-    |
-    +-- mana regeneration every 10 ticker calls
+CombatTicker (1/tick)
+  ├─ projectiles
+  ├─ status effects
+  ├─ area telegraphs
+  └─ mana regeneration cadence
 ```
 
-There is no repeating task per:
+No combat subsystem creates independent repeating tasks.
 
-- player
-- cooldown
-- combo
-- projectile
-- status effect
+## Area impact boundary
 
-Spell/basic-attack cooldowns and combo expiry remain timestamp based.
+`AreaImpactRequest` is the canonical definition for circular combat impacts.
 
-## Projectile model
+It carries:
 
-Virtual projectiles store only lightweight runtime state:
+- radius
+- vertical radius
+- damage
+- optional on-hit status
+- horizontal knockback
+- vertical knockback
+
+`AreaImpactService` resolves nearby living entities using bounded world queries and performs a horizontal-radius check before applying the request.
+
+Telegraphs use this directly.
+
+Explosive projectiles construct the same request from their projectile damage/status configuration.
+
+## Telegraph lifecycle
+
+`AreaTelegraphService` stores:
+
+- owner UUID
+- world UUID
+- immutable center vector
+- monotonic impact timestamp
+- immutable telegraph specification
+
+Every tick it either:
+
+1. removes invalid/disconnected/world-changed owners
+2. renders the warning ring
+3. or resolves the impact exactly once and removes the telegraph
+
+Bash is the first consumer:
+
+```text
+cast Bash
+   |
+   v
+center = 2 blocks forward
+   |
+   v
+350 ms warning ring
+   |
+   v
+2.25-block area impact
+   |
+   +-- physical damage
+   +-- horizontal knockback
+   +-- vertical lift
+```
+
+## Projectile lifecycle
+
+An active virtual projectile contains:
 
 - owner UUID
 - world UUID
 - current position
 - normalized direction
-- traveled distance
-- immutable projectile specification
+- distance traveled
+- immutable projectile spec
+- UUID set of entities already hit
 
-Each tick advances a projectile by at most its configured speed. The service ray-traces the entire movement segment using Paper's combined block/entity collision query.
+For each tick:
 
-A hit terminates the projectile immediately.
+1. determine the movement segment for this tick
+2. ray-trace the segment
+3. if nothing is hit, advance normally
+4. if a block is hit, terminate
+5. if an entity is hit, apply the configured impact
+6. for piercing projectiles, record that entity UUID and continue the unused portion of the same segment
+7. terminate once the distinct-hit limit or travel limit is reached
 
-The projectile system does not create Minecraft projectile entities, armor stands, displays, or scheduler tasks.
+A small forward nudge is applied after a piercing hit to guarantee forward progress even when the collision position lies directly on an entity boundary.
 
-## Arcane Bolt
+Already-hit UUIDs are excluded from subsequent ray traces.
 
-Arcane Bolt uses a `ProjectileSpec` with:
+## Explosive projectiles
 
-- speed: 1.35 blocks/tick
-- maximum distance: 14 blocks
-- collision radius: 0.45 blocks
-- magic base damage: 8
-- END_ROD trail/impact particles
-- refreshable burn on entity impact
+`ProjectileSpec.explosionRadius > 0` changes collision semantics:
 
-Its ability implementation only asks `VirtualProjectileService` to spawn the specification. Collision, lifetime, damage, and on-hit status handling remain outside the ability.
+- first entity/block collision terminates the projectile
+- the normal direct-hit path is replaced by a circular `AreaImpactService` call
+- damage and optional on-hit status are reused from the projectile definition
 
-## Status effects
+An explosive specification must use `maxEntityHits == 1`. Invalid combinations fail during construction instead of producing ambiguous runtime behavior.
 
-Pure status state is represented by:
+## Ability responsibilities
 
-- `StatusEffectSpec`
-- `ActiveStatusEffect`
-- `StatusEffectTracker`
-- `StatusEffectTick`
+Abilities still orchestrate rather than implement engine mechanics.
 
-A status specification contains:
+`ArcaneBoltAbility` only declares an immutable projectile specification and asks the projectile service to spawn it.
 
-- type
-- strength
-- duration
-- tick interval
-- stack policy
+`BashAbility` only calculates a point in front of the caster and asks the telegraph service to spawn its immutable area specification.
 
-Supported stack policies:
+Neither ability owns:
 
-- `REPLACE`
-- `REFRESH`
-- `STACK_INTENSITY`
+- target iteration
+- damage formulas
+- critical calculations
+- defense calculations
+- status tracking
+- collision iteration
+- scheduler tasks
 
-The Paper-facing `StatusEffectService` stores trackers by target entity UUID. It resolves entities/sources only while ticking, so effect state does not retain Bukkit entity references.
+## Defensive rules
 
-Current periodic behaviors:
-
-- `BURN` -> magic damage
-- `BLEED` -> physical damage
-
-Periodic damage uses `DamageRequest.withoutCriticals()`, making DoT critical eligibility an explicit rule rather than an accidental consequence of attacker stats.
-
-## Damage pipeline
-
-`DamageRequest` describes the attack itself:
-
-- damage type
-- base damage
-- additive damage
-- attack multiplier
-- critical chance bonus
-- critical damage multiplier bonus
-- whether this damage is eligible to crit
-
-The calculator applies:
-
-1. base + additive damage
-2. finite-value validation and safety cap
-3. request multiplier
-4. attacker physical/magic multiplier
-5. optional critical roll and critical multiplier
-6. defender defense mitigation
-7. final safety cap
-
-Abilities and status effects do not implement their own arithmetic.
-
-## Rules
-
-- Paper listeners translate events and delegate; they do not own combat formulas.
-- Pure domain state does not depend on Bukkit/Paper where practical and is unit tested without a server.
-- Mana and spell cooldown mutations are centralized.
-- Combo expiry is checked when input or melee decisions occur.
-- Combat state stores UUID-keyed data and does not retain disconnected player references.
-- Vanilla player melee damage is cancelled and replaced by `BasicAttackService`.
-- Left-clicking an entity during an active combo is routed into `ComboService`.
-- Internal damage application is explicitly marked so plugin damage is not reinterpreted as a fresh basic attack.
-- Player stats are immutable values replaced atomically on `PlayerCombatState`.
-- Random critical rolls are injected into the calculator, keeping tests deterministic.
-- Projectile collision is segment-based to avoid obvious tunneling.
-- Status stacking semantics are explicit rather than implicit.
+- World changes invalidate active projectile/telegraph state owned by that player.
+- Projectiles cannot record the same entity twice.
+- Hit limits must be positive.
+- Explosion radius must be finite and non-negative.
+- Explosive multi-hit combinations are rejected.
+- AoE radius/vertical bounds/knockback values are validated at construction.
+- Zero horizontal displacement still permits vertical knockback.
+- World/entity references are resolved at tick time rather than retained in long-lived combat state.

@@ -25,7 +25,9 @@ public final class ArcaneBoltAbility implements AbilityAction {
                     1.25,
                     2000L,
                     500L,
-                    StatusStackPolicy.REFRESH)));
+                    StatusStackPolicy.REFRESH)),
+            2,
+            0.0);
 
     private final VirtualProjectileService projectiles;
 

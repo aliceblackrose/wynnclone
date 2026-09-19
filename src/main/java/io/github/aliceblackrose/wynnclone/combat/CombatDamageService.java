@@ -4,6 +4,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
+import org.bukkit.Location;
 import org.bukkit.Particle;
 import org.bukkit.Sound;
 import org.bukkit.entity.LivingEntity;
@@ -65,6 +66,14 @@ public final class CombatDamageService {
     }
 
     public void knockAway(Player source, LivingEntity target, double horizontalStrength, double verticalStrength) {
+        Objects.requireNonNull(source, "source");
+        knockAway(source.getLocation(), target, horizontalStrength, verticalStrength);
+    }
+
+    public void knockAway(Location source, LivingEntity target, double horizontalStrength, double verticalStrength) {
+        Objects.requireNonNull(source, "source");
+        Objects.requireNonNull(target, "target");
+
         if (!Double.isFinite(horizontalStrength) || horizontalStrength < 0.0) {
             throw new IllegalArgumentException("Horizontal knockback must be finite and non-negative");
         }
@@ -72,16 +81,18 @@ public final class CombatDamageService {
             throw new IllegalArgumentException("Vertical knockback must be finite");
         }
 
-        Vector direction = target.getLocation().toVector().subtract(source.getLocation().toVector()).setY(0.0);
-        if (direction.lengthSquared() < 1.0e-9) {
-            direction = source.getLocation().getDirection().setY(0.0);
-        }
-        if (direction.lengthSquared() < 1.0e-9) {
-            return;
+        Vector impulse = new Vector(0.0, verticalStrength, 0.0);
+        if (horizontalStrength > 0.0) {
+            Vector direction = target.getLocation().toVector().subtract(source.toVector()).setY(0.0);
+            if (direction.lengthSquared() >= 1.0e-9) {
+                impulse.add(direction.normalize().multiply(horizontalStrength));
+            }
         }
 
-        Vector velocity = direction.normalize().multiply(horizontalStrength).setY(verticalStrength);
-        target.setVelocity(target.getVelocity().add(velocity));
+        if (impulse.lengthSquared() <= 1.0e-12) {
+            return;
+        }
+        target.setVelocity(target.getVelocity().add(impulse));
     }
 
     private record DamageKey(UUID attackerId, UUID targetId) {

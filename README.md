@@ -1,124 +1,125 @@
 # WynnClone Combat
 
-A Java 25 / Paper 26.2 combat prototype focused on fast click-combo abilities and a controlled RPG damage pipeline.
+A Java 25 / Paper 26.2 combat prototype focused entirely on responsive action-RPG combat.
 
 ## Current combat
 
-- ordered left/right click combos
-- per-player combat state
-- mana and centralized regeneration
-- timestamp-based spell cooldowns
-- custom basic attacks with weapon attack-speed gates
-- immutable combat stats
-- physical and magic damage multipliers
-- defense mitigation
-- deterministic/testable critical-hit calculation
-- stable weapon definitions with per-weapon crit bonuses
-- centralized virtual projectile simulation
-- segment ray-trace collision against blocks and living entities
-- explicit status effects with replace/refresh/intensity stacking
-- burn and bleed tick behavior
-- non-critical damage-over-time requests
-- one combat ticker for projectiles, effects, and mana cadence
-- spell-generated damage recursion protection
-- targeting, knockback, particles, sounds, and action-bar feedback
-- `/combat mana`, `/combat stats`, `/combat effects`, `/combat projectiles`, `/combat combo`, and `/combat cast`
-- unit tests for the pure combat domain
-
-All spell combos currently begin with right click. Left-clicking an entity while a combo is active contributes the `LEFT` combo input; otherwise it executes the custom basic attack and cancels vanilla melee damage.
+- ordered left/right click spell combos
+- custom melee/basic attacks
+- weapon attack-speed gates
+- mana and timestamp-based cooldowns
+- physical/magic damage scaling
+- critical hits and defense mitigation
+- virtual projectiles with segment collision
+- piercing projectile hit limits
+- optional projectile explosions
+- burn and bleed status effects
+- explicit status stacking policies
+- delayed area telegraphs
+- shared circular AoE damage/status/knockback
+- one central combat ticker
+- particles, sounds, action-bar feedback, and debug commands
+- pure-domain regression tests
 
 ## Prototype combos
 
-| Ability | Combo |
-| --- | --- |
-| Bash | R-L-L |
-| Dash | R-R-L |
-| Arcane Bolt | R-L-R |
-| Blink | R-R-R |
+| Ability | Combo | Behavior |
+| --- | --- | --- |
+| Bash | R-L-L | 350 ms warned circular impact with damage + knockback |
+| Dash | R-R-L | forward movement |
+| Arcane Bolt | R-L-R | moving magic projectile that can pierce two targets and apply burn |
+| Blink | R-R-R | short safe teleport |
 
-## Arcane Bolt
+## Telegraphs
 
-Arcane Bolt is now a virtual projectile rather than an instant entity ray.
+Bash now demonstrates the telegraph system instead of applying its hit immediately.
 
-It:
+On cast:
 
-- starts at the caster eye position
-- moves 1.35 blocks per server tick
-- has a 14-block maximum travel distance
-- checks the complete movement segment each tick with Paper ray tracing
-- stops on the nearest solid block or eligible living entity
-- deals magic damage through the normal combat damage pipeline
-- applies a short refreshable burn on entity impact
-- renders only particles; it does not spawn a Bukkit projectile entity
+1. a target area is placed two blocks in front of the caster
+2. a 16-point warning ring is rendered for 350 ms
+3. the impact resolves once
+4. targets inside the horizontal radius and vertical bound are damaged
+5. configured knockback/status behavior is applied
 
-Because collision is checked along each segment rather than only at discrete points, targets cannot normally be skipped simply because the projectile moves more than one block per tick.
+The telegraph stores owner/world UUIDs and immutable geometry/combat data rather than retaining a `Player` or `World`.
 
-## Status effects
+If the caster disconnects, dies, or changes worlds before impact, the telegraph is discarded.
 
-The prototype status engine currently defines:
+## Area impacts
 
-- `BURN`: periodic magic damage
-- `BLEED`: periodic physical damage
+`AreaImpactRequest` is the shared AoE combat definition used by telegraphs and projectile explosions.
 
-Status definitions explicitly specify:
+It contains:
 
-- strength
-- duration
-- tick interval
-- stack policy
+- horizontal radius
+- vertical radius
+- damage request
+- optional status effect
+- horizontal knockback
+- vertical knockback
 
-Supported stack policies are:
+This keeps AoE arithmetic and target application outside individual abilities.
 
-- `REPLACE`
-- `REFRESH`
-- `STACK_INTENSITY`
+## Projectile behaviors
 
-Status effects are stored by entity UUID and processed by the shared combat ticker. There is no scheduler task per effect.
+A `ProjectileSpec` now includes:
 
-Damage-over-time ticks call the same `CombatDamageService` as normal attacks, but their `DamageRequest` explicitly disables critical hits.
+- speed per tick
+- maximum travel distance
+- collision radius
+- damage request
+- trail/impact particles
+- optional status effect
+- maximum distinct entity hits
+- optional explosion radius
 
-## Combat ticker
+### Piercing
 
-One once-per-tick combat scheduler drives:
+Non-explosive projectiles can hit more than one entity.
 
-1. virtual projectile movement and collision
-2. status-effect ticking
-3. mana regeneration on an internal 10-tick cadence
+Each active projectile tracks only the UUIDs it has already hit. The ray-trace filter excludes those UUIDs, then the same tick's remaining movement segment continues after the collision.
 
-This avoids creating one scheduler task per player, projectile, effect, or cooldown.
+Arcane Bolt currently has:
 
-## Combat stats
+- 1.35 blocks/tick
+- 14-block maximum distance
+- 0.45 collision radius
+- 2-target hit limit
+- magic damage
+- refreshable burn
 
-Every tracked player currently starts with:
+### Explosions
 
-- physical damage multiplier: `1.00x`
-- magic damage multiplier: `1.00x`
-- critical chance: `5%`
-- critical damage: `1.50x`
-- defense: `0`
+An explosive projectile stops on its first entity or block collision and resolves a shared area impact at that location.
 
-These values are held in an immutable `CombatStats` value. Equipment/class systems can replace the runtime stats later without moving formulas into abilities.
+To keep semantics deterministic, explosive specifications are rejected if they also request more than one direct entity hit.
 
-Critical hits use an injected random roll inside `DamageCalculator`, so the calculation is deterministic in unit tests. Successful crits produce a crit particle burst and sound in game.
+## Scheduler model
 
-## Weapon definitions
+One `CombatTicker` runs once per server tick:
 
-The Paper-facing resolver converts the held vanilla item into a stable `WeaponDefinition` containing:
+```text
+CombatTicker
+  ├─ VirtualProjectileService.tick()
+  ├─ StatusEffectService.tick()
+  ├─ AreaTelegraphService.tick()
+  └─ mana regeneration every 10 ticks
+```
 
-- stable ID
-- base damage
-- attack speed
-- critical chance bonus
+There is no scheduler task per player, cooldown, combo, projectile, status effect, or telegraph.
 
-Current prototype behavior:
+## Debug commands
 
-- swords: normal attack speed, +2% crit chance
-- axes: slow attack speed
-- mace: very slow attack speed, +5% crit chance
-- trident: normal attack speed, +3% crit chance
-- other items / fists: fast attack speed
-
-This resolver is intentionally a boundary. A future custom-item system can replace its definitions without changing the attack or damage engine.
+```text
+/combat mana
+/combat stats
+/combat effects
+/combat projectiles
+/combat telegraphs
+/combat combo
+/combat cast <ability-id>
+```
 
 ## Build
 
