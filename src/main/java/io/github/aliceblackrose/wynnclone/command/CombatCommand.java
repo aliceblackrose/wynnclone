@@ -34,12 +34,13 @@ public final class CombatCommand implements CommandExecutor, TabCompleter {
             return true;
         }
         if (args.length == 0) {
-            player.sendMessage(Component.text("/combat <mana|combo|cast>", NamedTextColor.YELLOW));
+            player.sendMessage(Component.text("/combat <mana|stats|combo|cast>", NamedTextColor.YELLOW));
             return true;
         }
 
         return switch (args[0].toLowerCase(Locale.ROOT)) {
             case "mana" -> showMana(player);
+            case "stats" -> showStats(player);
             case "combo" -> showCombo(player);
             case "cast" -> cast(player, args);
             default -> false;
@@ -51,6 +52,20 @@ public final class CombatCommand implements CommandExecutor, TabCompleter {
         player.sendMessage(Component.text(
                 String.format(Locale.ROOT, "Mana: %.1f / %.1f", mana.current(), mana.maximum()),
                 NamedTextColor.AQUA));
+        return true;
+    }
+
+    private boolean showStats(Player player) {
+        var stats = states.state(player.getUniqueId()).stats();
+        String text = String.format(
+                Locale.ROOT,
+                "Physical x%.2f | Magic x%.2f | Crit %.1f%% x%.2f | Defense %.1f",
+                stats.physicalDamageMultiplier(),
+                stats.magicDamageMultiplier(),
+                stats.criticalChance() * 100.0,
+                stats.criticalDamageMultiplier(),
+                stats.defense());
+        player.sendMessage(Component.text(text, NamedTextColor.AQUA));
         return true;
     }
 
@@ -82,7 +97,9 @@ public final class CombatCommand implements CommandExecutor, TabCompleter {
     public List<String> onTabComplete(CommandSender sender, Command command, String alias, String[] args) {
         if (args.length == 1) {
             String prefix = args[0].toLowerCase(Locale.ROOT);
-            return List.of("mana", "combo", "cast").stream().filter(value -> value.startsWith(prefix)).toList();
+            return List.of("mana", "stats", "combo", "cast").stream()
+                    .filter(value -> value.startsWith(prefix))
+                    .toList();
         }
         if (args.length == 2 && args[0].equalsIgnoreCase("cast")) {
             String prefix = args[1].toLowerCase(Locale.ROOT);

@@ -8,29 +8,30 @@ Paper input / damage event
            v
   input boundary listeners
            |
-      +----+------------------+
-      |                       |
-      v                       v
- ComboService          BasicAttackService
-      |                       |
-      v                       v
- AbilityEngine         WeaponProfileResolver
-      |                       |
-      +-----------+-----------+
-                  |
-                  v
-           DamageRequest
-                  |
-                  v
-          DamageCalculator
-                  |
-                  v
-       CombatDamageService
-                  |
-          +-------+-------+
-          |               |
-          v               v
-      targeting      Paper effects
+      +----+----------------------+
+      |                           |
+      v                           v
+ ComboService              BasicAttackService
+      |                           |
+      v                           v
+ AbilityEngine          WeaponDefinitionResolver
+      |                           |
+      +-------------+-------------+
+                    |
+                    v
+             DamageRequest
+                    |
+                    v
+            CombatDamageService
+               /          \
+              v            v
+       CombatStats    DamageCalculator
+                          |
+                          v
+                    DamageResult
+                          |
+                          v
+                    Paper damage
 ```
 
 ## Rules
@@ -45,34 +46,53 @@ Paper input / damage event
 - Ability IDs and combos are unique and validated during registration.
 - Vanilla player melee damage is cancelled and replaced by `BasicAttackService`.
 - Left-clicking an entity during an active combo is routed into `ComboService` instead of the basic attack.
-- Spell and basic-attack damage share `DamageRequest -> DamageCalculator -> CombatDamageService`.
+- Spell and basic-attack damage share `DamageRequest -> CombatDamageService -> DamageCalculator`.
 - Internal damage application is explicitly marked so the melee listener does not recursively reinterpret plugin-generated damage as a fresh player attack.
+- Player stats are immutable values replaced atomically on `PlayerCombatState`.
+- Random critical rolls are injected into the calculator, keeping tests deterministic.
+
+## Combat stats
+
+`CombatStats` contains:
+
+- physical damage multiplier
+- magic damage multiplier
+- critical chance
+- critical damage multiplier
+- defense
+
+The damage type selects the relevant attacker multiplier. Target player defense comes from that target's own combat state. Non-player living entities currently use neutral/default stats until a dedicated mob-stat layer exists.
 
 ## Damage pipeline
 
-`DamageRequest` currently carries:
+`DamageRequest` describes the attack itself:
 
 - damage type
 - base damage
 - additive damage
-- multiplier
-- defense
+- attack multiplier
+- critical chance bonus
+- critical damage multiplier bonus
 
 The calculator applies:
 
 1. base + additive damage
 2. finite-value validation and safety cap
-3. multiplicative scaling
-4. defense mitigation
-5. final safety cap
+3. request multiplier
+4. attacker physical/magic multiplier
+5. critical roll and critical multiplier
+6. defender defense mitigation
+7. final safety cap
 
-The current abilities use zero defense because a stat/equipment system is intentionally outside this slice. That field is already part of the canonical request so target defense can be wired in later without moving formulas back into abilities.
+Abilities only declare their own base damage/type. They do not inspect player stats or implement critical formulas.
 
 ## Weapon boundary
 
-`WeaponProfileResolver` is deliberately small and Paper-facing. For now it maps vanilla held materials to:
+`WeaponDefinitionResolver` is deliberately small and Paper-facing. It maps a held vanilla `Material` to an immutable `WeaponDefinition` containing:
 
+- stable weapon ID
 - base attack damage
 - `AttackSpeed`
+- critical chance bonus
 
-The rest of combat only consumes the resulting `WeaponProfile`. A future RPG item system should replace this mapping rather than adding item checks throughout combat code.
+The rest of combat consumes the definition and has no material-specific branches. A future custom item/equipment system should replace this resolver rather than spreading item checks through combat code.

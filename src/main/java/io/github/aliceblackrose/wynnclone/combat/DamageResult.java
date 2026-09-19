@@ -5,13 +5,14 @@ import java.util.Objects;
 public record DamageResult(
         DamageType type,
         double rawDamage,
-        double modifiedDamage,
+        double scaledDamage,
+        boolean critical,
         double finalDamage) {
 
     public DamageResult {
         Objects.requireNonNull(type, "type");
         validate(rawDamage, "Raw damage");
-        validate(modifiedDamage, "Modified damage");
+        validate(scaledDamage, "Scaled damage");
         validate(finalDamage, "Final damage");
     }
 

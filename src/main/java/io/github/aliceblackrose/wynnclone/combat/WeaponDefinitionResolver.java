@@ -1,28 +1,39 @@
 package io.github.aliceblackrose.wynnclone.combat;
 
+import java.util.Locale;
 import java.util.Objects;
 import org.bukkit.Material;
 
-public final class WeaponProfileResolver {
+public final class WeaponDefinitionResolver {
 
-    public WeaponProfile resolve(Material material) {
+    public WeaponDefinition resolve(Material material) {
         Objects.requireNonNull(material, "material");
+
         String name = material.name();
+        String id = "minecraft:" + name.toLowerCase(Locale.ROOT);
 
         if (name.endsWith("_SWORD")) {
-            return new WeaponProfile(tierDamage(name, 4.0, 4.0, 5.0, 6.0, 7.0, 8.0), AttackSpeed.NORMAL);
+            return new WeaponDefinition(
+                    id,
+                    tierDamage(name, 4.0, 4.0, 5.0, 6.0, 7.0, 8.0),
+                    AttackSpeed.NORMAL,
+                    0.02);
         }
         if (name.endsWith("_AXE")) {
-            return new WeaponProfile(tierDamage(name, 5.0, 7.0, 9.0, 9.0, 9.0, 10.0), AttackSpeed.SLOW);
+            return new WeaponDefinition(
+                    id,
+                    tierDamage(name, 5.0, 7.0, 9.0, 9.0, 9.0, 10.0),
+                    AttackSpeed.SLOW,
+                    0.0);
         }
         if (name.equals("MACE")) {
-            return new WeaponProfile(10.0, AttackSpeed.VERY_SLOW);
+            return new WeaponDefinition(id, 10.0, AttackSpeed.VERY_SLOW, 0.05);
         }
         if (name.equals("TRIDENT")) {
-            return new WeaponProfile(8.0, AttackSpeed.NORMAL);
+            return new WeaponDefinition(id, 8.0, AttackSpeed.NORMAL, 0.03);
         }
 
-        return new WeaponProfile(2.0, AttackSpeed.FAST);
+        return new WeaponDefinition(id, 2.0, AttackSpeed.FAST, 0.0);
     }
 
     private static double tierDamage(

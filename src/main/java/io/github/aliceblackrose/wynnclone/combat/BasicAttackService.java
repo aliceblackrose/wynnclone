@@ -7,13 +7,13 @@ import org.bukkit.entity.Player;
 public final class BasicAttackService {
     private final CombatStateStore states;
     private final CombatClock clock;
-    private final WeaponProfileResolver weapons;
+    private final WeaponDefinitionResolver weapons;
     private final CombatDamageService damage;
 
     public BasicAttackService(
             CombatStateStore states,
             CombatClock clock,
-            WeaponProfileResolver weapons,
+            WeaponDefinitionResolver weapons,
             CombatDamageService damage) {
         this.states = Objects.requireNonNull(states, "states");
         this.clock = Objects.requireNonNull(clock, "clock");
@@ -30,15 +30,19 @@ public final class BasicAttackService {
         }
 
         var state = states.state(attacker.getUniqueId());
-        var profile = weapons.resolve(attacker.getInventory().getItemInMainHand().getType());
+        WeaponDefinition weapon = weapons.resolve(attacker.getInventory().getItemInMainHand().getType());
         long now = clock.nowMillis();
 
         if (!state.basicAttackCooldown().ready(now)) {
             return BasicAttackResult.COOLDOWN;
         }
 
-        state.basicAttackCooldown().trigger(now, profile.attackSpeed().intervalMillis());
-        damage.damage(attacker, target, DamageRequest.physical(profile.baseDamage()));
+        state.basicAttackCooldown().trigger(now, weapon.attackSpeed().intervalMillis());
+
+        DamageRequest request = DamageRequest.physical(weapon.baseDamage())
+                .withCriticalChanceBonus(weapon.criticalChanceBonus());
+        damage.damage(attacker, target, request);
+
         return BasicAttackResult.HIT;
     }
 }

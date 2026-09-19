@@ -21,7 +21,7 @@ import io.github.aliceblackrose.wynnclone.combat.DamageCalculator;
 import io.github.aliceblackrose.wynnclone.combat.InputCombo;
 import io.github.aliceblackrose.wynnclone.combat.SystemCombatClock;
 import io.github.aliceblackrose.wynnclone.combat.TargetingService;
-import io.github.aliceblackrose.wynnclone.combat.WeaponProfileResolver;
+import io.github.aliceblackrose.wynnclone.combat.WeaponDefinitionResolver;
 import io.github.aliceblackrose.wynnclone.command.CombatCommand;
 import io.github.aliceblackrose.wynnclone.listener.CombatInputListener;
 import io.github.aliceblackrose.wynnclone.listener.MeleeCombatListener;
@@ -48,15 +48,15 @@ public final class WynnClonePlugin extends JavaPlugin {
         var abilities = new CombatAbilities(catalog);
         var feedback = new CombatFeedback();
         var targeting = new TargetingService();
-        var damage = new CombatDamageService(new DamageCalculator());
 
         combatStates = new CombatStateStore(maximumMana);
+        var damage = new CombatDamageService(new DamageCalculator(), combatStates);
         var comboService = new ComboService(catalog, comboTimeoutMillis, maxComboLength);
         var abilityEngine = new AbilityEngine(abilities, combatStates, clock, feedback, getLogger());
         var basicAttacks = new BasicAttackService(
                 combatStates,
                 clock,
-                new WeaponProfileResolver(),
+                new WeaponDefinitionResolver(),
                 damage);
 
         registerPrototypeAbilities(abilities, targeting, damage);
